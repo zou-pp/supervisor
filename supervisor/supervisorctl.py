@@ -762,6 +762,14 @@ class DefaultControllerPlugin(ControllerPluginBase):
             self.handle_error("Error: start requires a process name", code=LSBInitErrorCode.INVALID_ARGS)
             self.help_start()
             return
+        
+        if names[0].startswith('-p'):
+            if os.environ['HTTP_PROXY'] is None:
+                os.environ['HTTP_PROXY'] = 'http://127.0.0.1:9090'
+            names = names[1:]
+        else:
+            if os.environ['HTTP_PROXY'] is not None:
+                del os.environ['HTTP_PROXY']
 
         if 'all' in names:
             results = supervisor.startAllProcesses()
