@@ -255,7 +255,7 @@ class SupervisorNamespaceRPCInterface:
 
         return group, process
 
-    def startProcess(self, name, wait=True):
+    def startProcess(self, name, wait=True, isUsedProxy = False):
         """ Start a process
 
         @param string name Process name (or ``group:name``, or ``group:*``)
@@ -281,7 +281,7 @@ class SupervisorNamespaceRPCInterface:
         if process.get_state() in RUNNING_STATES:
             raise RPCError(Faults.ALREADY_STARTED, name)
 
-        process.spawn()
+        process.spawn(isUsedProxy)
 
         # We call reap() in order to more quickly obtain the side effects of
         # process.finish(), which reap() eventually ends up calling.  This
@@ -329,7 +329,7 @@ class SupervisorNamespaceRPCInterface:
 
         return True
 
-    def startProcessGroup(self, name, wait=True):
+    def startProcessGroup(self, name, wait=True, isUsedProxy=False):
         """ Start all processes in the group named 'name'
 
         @param string name     The group name
@@ -348,13 +348,13 @@ class SupervisorNamespaceRPCInterface:
         processes = [ (group, process) for process in processes ]
 
         startall = make_allfunc(processes, isNotRunning, self.startProcess,
-                                wait=wait)
+                                wait=wait, isUsedProxy=isUsedProxy)
 
         startall.delay = 0.05
         startall.rpcinterface = self
         return startall # deferred
 
-    def startAllProcesses(self, wait=True):
+    def startAllProcesses(self, wait=True, isUsedProxy=False):
         """ Start all processes listed in the configuration file
 
         @param boolean wait    Wait for each process to be fully started
@@ -364,7 +364,7 @@ class SupervisorNamespaceRPCInterface:
 
         processes = self._getAllProcesses()
         startall = make_allfunc(processes, isNotRunning, self.startProcess,
-                                wait=wait)
+                                wait=wait, isUsedProxy=isUsedProxy)
 
         startall.delay = 0.05
         startall.rpcinterface = self

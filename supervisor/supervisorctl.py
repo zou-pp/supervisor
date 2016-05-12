@@ -30,6 +30,7 @@ import socket
 import errno
 import urlparse
 import threading
+import os
 
 from supervisor.medusa import asyncore_25 as asyncore
 
@@ -162,6 +163,7 @@ class Controller(cmd.Cmd):
         # call us again for each command.
         self.cmdqueue.extend(lines)
         cmd, arg, line = self.parseline(line)
+
         if not line:
             return self.emptyline()
         if cmd is None:
@@ -586,19 +588,36 @@ class DefaultControllerPlugin(ControllerPluginBase):
     def help_exit(self):
         self.ctl.output("exit\tExit the supervisor shell.")
 
-    def _show_statuses(self, process_infos):
+    def _show_statuses(self, process_infos, isShowProxy):
         namespecs, maxlen = [], 30
         for i, info in enumerate(process_infos):
             namespecs.append(make_namespec(info['group'], info['name']))
             if len(namespecs[i]) > maxlen:
                 maxlen = len(namespecs[i])
 
-        template = '%(namespec)-' + str(maxlen+3) + 's%(state)-10s%(desc)s'
-        for i, info in enumerate(process_infos):
-            line = template % {'namespec': namespecs[i],
-                               'state': info['statename'],
-                               'desc': info['description']}
-            self.ctl.output(line)
+        if isShowProxy:
+            template = '%(namespec)-' + str(maxlen+3) + 's%(state)-10s%(useproxy)-10s%(desc)s'
+            for i, info in enumerate(process_infos):
+                _isusedProxy = ''
+                str_path = '/proc/' + str(info['pid']) + '/environ'
+                if os.path.isfile(str_path):
+                    fp = open('/proc/' + str(info['pid']) + '/environ')
+                    str_env = fp.read()
+                    if 'HTTP_PROXY' in str_env:
+                        _isusedProxy = 'papa'
+                
+                line = template % {'namespec': namespecs[i],
+                                   'state': info['statename'],
+                                   'useproxy':_isusedProxy,
+                                   'desc': info['description']}
+                self.ctl.output(line)
+        else:
+            template = '%(namespec)-' + str(maxlen+3) + 's%(state)-10s%(desc)s'
+            for i, info in enumerate(process_infos):
+                line = template % {'namespec': namespecs[i],
+                                   'state': info['statename'],
+                                   'desc': info['description']}
+                self.ctl.output(line)
 
     def do_status(self, arg):
         if not self.ctl.upcheck():
@@ -608,6 +627,20 @@ class DefaultControllerPlugin(ControllerPluginBase):
         all_infos = supervisor.getAllProcessInfo()
 
         names = arg.split()
+
+        '''
+        if not names:
+            self.ctl.output("Error: status requires a process name")
+            self.help_status()
+            return
+        '''
+
+        _isShowProxy = False
+        if  len(names) > 0:
+            if names[0].startswith('-p'):
+                _isShowProxy = True
+                names = names[1:]
+
         if not names or "all" in names:
             matching_infos = all_infos
         else:
@@ -632,7 +665,7 @@ class DefaultControllerPlugin(ControllerPluginBase):
                     else:
                         msg = "%s: ERROR (no such process)" % name
                     self.ctl.output(msg)
-        self._show_statuses(matching_infos)
+        self._show_statuses(matching_infos, _isShowProxy)
 
     def help_status(self):
         self.ctl.output("status <name>\t\tGet status for a single process")
@@ -705,8 +738,22 @@ class DefaultControllerPlugin(ControllerPluginBase):
             self.help_start()
             return
 
+        _isusedProxy = False
+
+        if names[0].startswith('-p'):
+            #if 'HTTP_PROXY' not in os.environ.keys():
+                #os.putenv('HTTP_PROXY', 'http://127.0.0.1:9090')
+                #os.environ['HTTP_PROXY'] = 'http://127.0.0.1:9090'
+            _isusedProxy = True
+            names = names[1:]
+        else:
+            #if 'HTTP_PROXY' in os.environ.keys():
+                #os.environ.pop('HTTP_PROXY')
+                #os.unsetenv('HTTP_PROXY')
+            _isusedProxy = False
+
         if 'all' in names:
-            results = supervisor.startAllProcesses()
+            results = supervisor.startAllProcesses(True, _isusedProxy)
             for result in results:
                 result = self._startresult(result)
                 self.ctl.output(result)
@@ -716,7 +763,7 @@ class DefaultControllerPlugin(ControllerPluginBase):
                 group_name, process_name = split_namespec(name)
                 if process_name is None:
                     try:
-                        results = supervisor.startProcessGroup(group_name)
+                        results = supervisor.startProcessGroup(group_name, True, _isusedProxy)
                         for result in results:
                             result = self._startresult(result)
                             self.ctl.output(result)
@@ -728,7 +775,7 @@ class DefaultControllerPlugin(ControllerPluginBase):
                             raise
                 else:
                     try:
-                        result = supervisor.startProcess(name)
+                        result = supervisor.startProcess(name, True, _isusedProxy)
                     except xmlrpclib.Fault, e:
                         error = self._startresult({'status': e.faultCode,
                                                    'name': process_name,
@@ -887,7 +934,11 @@ class DefaultControllerPlugin(ControllerPluginBase):
             self.help_restart()
             return
 
-        self.do_stop(arg)
+        idx = arg.find('-p')
+        if idx == -1:
+            self.do_stop(arg)
+        else:
+            self.do_stop(arg[idx+2:])
         self.do_start(arg)
 
     def help_restart(self):

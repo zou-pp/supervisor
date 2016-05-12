@@ -182,11 +182,12 @@ class Subprocess:
         self.spawnerr = msg
         self.config.options.logger.info("spawnerr: %s" % msg)
 
-    def spawn(self):
+    def spawn(self, isUsedProcess=False):
         """Start the subprocess.  It must not be running already.
 
         Return the process id.  If the fork() call fails, return None.
         """
+
         options = self.config.options
 
         if self.pid:
@@ -252,7 +253,7 @@ class Subprocess:
             return self._spawn_as_parent(pid)
 
         else:
-            return self._spawn_as_child(filename, argv)
+            return self._spawn_as_child(filename, argv, isUsedProcess)
 
     def _spawn_as_parent(self, pid):
         # Parent
@@ -276,7 +277,8 @@ class Subprocess:
         for i in range(3, options.minfds):
             options.close_fd(i)
 
-    def _spawn_as_child(self, filename, argv):
+    def _spawn_as_child(self, filename, argv, isUsedProcess=False):
+
         options = self.config.options
         try:
             # prevent child from receiving signals sent to the
@@ -314,6 +316,8 @@ class Subprocess:
             if self.config.environment is not None:
                 env.update(self.config.environment)
 
+            if isUsedProcess:
+                env['HTTP_PROXY'] = 'http://127.0.0.1:9090' #added this by zpp
             # change directory
             try:
                 cwd = self.config.directory
