@@ -31,6 +31,7 @@ import errno
 import urlparse
 import threading
 import os
+import httplib
 
 from supervisor.medusa import asyncore_25 as asyncore
 
@@ -726,6 +727,18 @@ class DefaultControllerPlugin(ControllerPluginBase):
         # assertion
         raise ValueError('Unknown result code %s for %s' % (code, name))
 
+    def check_papa_islive(self,addr):
+        try:
+            conn = httplib.HTTPConnection(addr)
+            conn.request("HEAD", "/")
+            res = conn.getresponse()
+            if res.status == 200:
+                return True
+        except Exception, e:
+            print 'papa is not live, error:', e
+            return False
+        return False
+
     def do_start(self, arg):
         if not self.ctl.upcheck():
             return
@@ -741,15 +754,12 @@ class DefaultControllerPlugin(ControllerPluginBase):
         _isusedProxy = False
 
         if names[0].startswith('-p'):
-            #if 'HTTP_PROXY' not in os.environ.keys():
-                #os.putenv('HTTP_PROXY', 'http://127.0.0.1:9090')
-                #os.environ['HTTP_PROXY'] = 'http://127.0.0.1:9090'
-            _isusedProxy = True
+            isLive = self.check_papa_islive("127.0.0.1:8081") #addr shouldn't start with "http://"
+            if isLive:
+                _isusedProxy = True
             names = names[1:]
         else:
-            #if 'HTTP_PROXY' in os.environ.keys():
-                #os.environ.pop('HTTP_PROXY')
-                #os.unsetenv('HTTP_PROXY')
+            
             _isusedProxy = False
 
         if 'all' in names:
