@@ -735,7 +735,7 @@ class DefaultControllerPlugin(ControllerPluginBase):
             if res.status == 200:
                 return True
         except Exception, e:
-            print 'papa is not live, error:', e
+            print 'papa is not ready, the process will not use papa'
             return False
         return False
 
